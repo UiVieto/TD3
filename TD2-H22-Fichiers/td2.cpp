@@ -115,13 +115,13 @@ shared_ptr<Acteur> lireActeur(istream& fichier, ListeFilms& listeFilms)
     acteur.anneeNaissance = lireUint16(fichier);
     acteur.sexe = lireUint8(fichier);
     
-    shared_ptr < Acteur > acteurExistant = listeFilms.trouverActeur(acteur.nom);
+    shared_ptr<Acteur> acteurExistant(listeFilms.trouverActeur(acteur.nom));
 
-    if (acteurExistant != nullptr)
+    if (acteurExistant.get() != nullptr)
         return acteurExistant;
     else {
         std::cout << "Création Acteur " << acteur.nom << endl;
-        shared_ptr < Acteur > nouveauActeur = make_shared < Acteur >(acteur);
+        shared_ptr<Acteur> nouveauActeur = make_shared<Acteur>(acteur);
         return nouveauActeur;
     }
     
@@ -230,15 +230,7 @@ shared_ptr<Acteur> ListeActeurs::operator[](int indice){
     return this->elements_[indice];
 }
 
-Film* ListeFilms::trouverFilm(const auto critere) 
-{
-    for (auto&& film : listefilm.enSpan()) {
-        if (critere(film))
-            return film;
-    }
 
-    return nullptr;
-}
 
 int main()
 {
@@ -246,8 +238,6 @@ int main()
     bibliotheque_cours::VerifierFuitesAllocations verifierFuitesAllocations;
     #endif
     bibliotheque_cours::activerCouleursAnsi();
-
-    int* fuite = new int;
 
     static const string ligneDeSeparation = "\n\033[35m════════════════════════════════════════\033[0m\n";
 
@@ -280,14 +270,6 @@ int main()
     std::cout << listeFilms[0] << endl;
     std::cout << ligneDeSeparation << "listeFilms[1]" << endl;
     std::cout << listeFilms[1] << endl;
-    
-    // Chapitre 10
-    cout << ligneDeSeparation << endl;
-    Film* filmRecette = listeFilms.trouverFilm() {
-        return type->recette == 955;
-    });
-
-    cout << filmRecette << endl;
 
     return 0;
 }

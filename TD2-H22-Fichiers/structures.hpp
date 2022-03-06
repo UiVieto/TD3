@@ -22,7 +22,7 @@ public:
     void enleverFilm(const Film* film);
 
     shared_ptr < Acteur > trouverActeur(const std::string& nomActeur) const;
-    Film* trouverFilm(const auto critere);
+    
 
     Film* operator[](int indice);
 
