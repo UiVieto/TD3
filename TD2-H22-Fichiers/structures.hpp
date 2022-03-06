@@ -3,8 +3,10 @@
 
 #include <string>
 #include <cassert>
+#include <memory>
 #include "gsl/span"
 using gsl::span;
+using namespace std;
 
 struct Film; struct Acteur; // Permet d'utiliser les types alors qu'ils seront défini après.
 
@@ -29,20 +31,26 @@ private:
 };
 
 struct ListeActeurs {
-	int capacite, nElements;
-	Acteur** elements; // Pointeur vers un tableau de Acteur*, chaque Acteur* pointant vers un Acteur.
+	span<Acteur*> spanListeActeurs() const {
+		return span(elements.get(), nElements);
+	}
+
+	int capacite = 0, nElements = 0;
+	unique_ptr<Acteur*[]> elements; // Pointeur vers un tableau de Acteur*, chaque Acteur* pointant vers un Acteur.
 };
 
 struct Film
 {
-	std::string titre, realisateur; // Titre et nom du réalisateur (on suppose qu'il n'y a qu'un réalisateur).
-	int anneeSortie, recette; // Année de sortie et recette globale du film en millions de dollars
+	std::string titre = "Inconnu", realisateur = "Inconnu"; // Titre et nom du réalisateur (on suppose qu'il n'y a qu'un réalisateur).
+	int anneeSortie = 0, recette = 0; // Année de sortie et recette globale du film en millions de dollars
 	ListeActeurs acteurs;
 };
 
 struct Acteur
 {
-	std::string nom; int anneeNaissance; char sexe;
+	std::string nom = "Inconnu"s;
+	int anneeNaissance = 0; 
+	char sexe = 'I';
 	ListeFilms joueDans;
 };
 
