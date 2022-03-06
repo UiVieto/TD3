@@ -10,28 +10,35 @@ using namespace std;
 
 struct Film; struct Acteur; // Permet d'utiliser les types alors qu'ils seront défini après.
 
-class ListeFilms {
+class ListeFilms 
+{
 public:
     ListeFilms() = default;
     ListeFilms(const std::string& nomFichier);
-    ListeFilms(const ListeFilms& l) { assert(l.elements == nullptr); } // Pas demandé dans l'énoncé, mais on veut s'assurer qu'on ne fait jamais de copie de liste, car la copie par défaut ne fait pas ce qu'on veut.  Donc on ne permet pas de copier une liste non vide (la copie de liste vide est utilisée dans la création d'un acteur).
+    ListeFilms(const ListeFilms& l) { assert(l.elements_ == nullptr); } // Pas demandé dans l'énoncé, mais on veut s'assurer qu'on ne fait jamais de copie de liste, car la copie par défaut ne fait pas ce qu'on veut.  Donc on ne permet pas de copier une liste non vide (la copie de liste vide est utilisée dans la création d'un acteur).
     ~ListeFilms();
+
     void ajouterFilm(Film* film);
     void enleverFilm(const Film* film);
+
     shared_ptr < Acteur > trouverActeur(const std::string& nomActeur) const;
+    Film* trouverFilm(const auto critere);
+
+    Film* operator[](int indice);
+
     span<Film*> enSpan() const;
-    Film* trouverFilm();
-    int size() const { return nElements; }
+    int size() const { return nElements_; }
 
 private:
     void changeDimension(int nouvelleCapacite);
 
-    int capacite = 0, nElements = 0;
-    Film** elements = nullptr; // Pointeur vers un tableau de Film*, chaque Film* pointant vers un Film.
+    int capacite_ = 0, nElements_ = 0;
+    Film** elements_ = nullptr; // Pointeur vers un tableau de Film*, chaque Film* pointant vers un Film.
     bool possedeLesFilms_ = false; // Les films seront détruits avec la liste si elle les possède.
 };
 
-class ListeActeurs {
+class ListeActeurs 
+{
 public:
     ListeActeurs(int nbElements) {
         capacite_ = nbElements;
@@ -40,14 +47,22 @@ public:
     }
     
     ListeActeurs(const ListeActeurs& listeActeur) {
-
+        capacite_ = listeActeur.capacite_;
+        nElements_ = listeActeur.capacite_;
     }
 
+    void assignerNElements(int nElements) {
+        nElements_ = nElements;
+    }
+
+    shared_ptr<Acteur> operator[](int indice);
+
     span<shared_ptr<Acteur>> enSpan() const;
+
+private:
     int capacite_ = 0;
     int nElements_ = 0;
     unique_ptr<shared_ptr<Acteur>[]> elements_;// Pointeur vers un tableau de Acteur*, chaque Acteur* pointant vers un Acteur.
-
 };
 
 struct Film

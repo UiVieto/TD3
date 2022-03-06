@@ -8,14 +8,17 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
+
+#include <memory>
+
 #include <string>
 #include <limits>
 #include <algorithm>
 #include "cppitertools/range.hpp"
 #include "gsl/span"
-#include <memory>
 #include <functional>
-#include <sstream>
+
 #include "debogage_memoire.hpp"        // Ajout des numéros de ligne des "new" dans le rapport de fuites.  Doit être après les include du système, qui peuvent utiliser des "placement new" (non supporté par notre ajout de numéros de lignes).
 using namespace std;
 using namespace iter;
@@ -53,26 +56,26 @@ string lireString(istream& fichier)
 //TODO: Une fonction pour ajouter un Film à une ListeFilms, le film existant déjà; on veut uniquement ajouter le pointeur vers le film existant.  Cette fonction doit doubler la taille du tableau alloué, avec au minimum un élément, dans le cas où la capacité est insuffisante pour ajouter l'élément.  Il faut alors allouer un nouveau tableau plus grand, copier ce qu'il y avait dans l'ancien, et éliminer l'ancien trop petit.  Cette fonction ne doit copier aucun Film ni Acteur, elle doit copier uniquement des pointeurs.
 void ListeFilms::ajouterFilm(Film* film)
 {
-    if (nElements == capacite)
-        changeDimension(max(1, capacite * 2));
-    elements[nElements++] = film;
+    if (nElements_ == capacite_)
+        changeDimension(max(1, capacite_ * 2));
+    elements_[nElements_++] = film;
 }
 
 void ListeFilms::changeDimension(int nouvelleCapacite)
 {
     Film** nouvelleListe = new Film * [nouvelleCapacite];
 
-    if (elements != nullptr) 
+    if (elements_ != nullptr) 
     {
-        nElements = min(nouvelleCapacite, nElements);
+        nElements_ = min(nouvelleCapacite, nElements_);
 
-        for (int i : range(nElements))
-            nouvelleListe[i] = elements[i];
-        delete[] elements;
+        for (int i : range(nElements_))
+            nouvelleListe[i] = elements_[i];
+        delete[] elements_;
     }
 
-    elements = nouvelleListe;
-    capacite = nouvelleCapacite;
+    elements_ = nouvelleListe;
+    capacite_ = nouvelleCapacite;
 }
 
 //TODO: Une fonction pour enlever un Film d'une ListeFilms (enlever le pointeur) sans effacer le film; la fonction prenant en paramètre un pointeur vers le film à enlever.  L'ordre des films dans la liste n'a pas à être conservé.
@@ -80,14 +83,14 @@ void ListeFilms::enleverFilm(const Film* film)
 {
     for (Film*& element : enSpan()) {  // Doit être une référence au pointeur pour pouvoir le modifier.
         if (element == film) {
-            if (nElements > 1)
-                element = elements[nElements - 1];
-            nElements--;
+            if (nElements_ > 1)
+                element = elements_[nElements_ - 1];
+            nElements_--;
             return;
         }
     }
 }
-span<Film*> ListeFilms::enSpan() const { return span(elements, nElements); }
+span<Film*> ListeFilms::enSpan() const { return span(elements_, nElements_); }
 
 //TODO: Une fonction pour trouver un Acteur par son nom dans une ListeFilms, qui retourne un pointeur vers l'acteur, ou nullptr si l'acteur n'est pas trouvé.  Devrait utiliser span.
 
@@ -132,7 +135,7 @@ Film* lireFilm(istream& fichier, ListeFilms& listeFilms)
     film->realisateur = lireString(fichier);
     film->anneeSortie = lireUint16(fichier);
     film->recette = lireUint16(fichier);
-    film->acteurs.nElements_ = lireUint8(fichier);  //NOTE: Vous avez le droit d'allouer d'un coup le tableau pour les acteurs, sans faire de réallocation comme pour ListeFilms.  Vous pouvez aussi copier-coller les fonctions d'allocation de ListeFilms ci-dessus dans des nouvelles fonctions et faire un remplacement de Film par Acteur, pour réutiliser cette réallocation.
+    film->acteurs.assignerNElements(lireUint8(fichier));  //NOTE: Vous avez le droit d'allouer d'un coup le tableau pour les acteurs, sans faire de réallocation comme pour ListeFilms.  Vous pouvez aussi copier-coller les fonctions d'allocation de ListeFilms ci-dessus dans des nouvelles fonctions et faire un remplacement de Film par Acteur, pour réutiliser cette réallocation.
     film->acteurs;
     std::cout << "Création Film " << film->titre << endl;
 
@@ -155,128 +158,136 @@ ListeFilms::ListeFilms(const string& nomFichier) : possedeLesFilms_(true)
     }
 }
 
-    //TODO: Une fonction pour détruire un film (relâcher toute la mémoire associée à ce film, et les acteurs qui ne jouent plus dans aucun films de la collection).  Noter qu'il faut enleve le film détruit des films dans lesquels jouent les acteurs.  Pour fins de débogage, affichez les noms des acteurs lors de leur destruction.
-    void detruireFilm(Film * film)
-    {
-        for (shared_ptr<Acteur> acteur : film->acteurs.enSpan()) {
-            acteur.get()->joueDans.enleverFilm(film);
-            if (!joueEncore(acteur.get()))
-                detruireActeur(acteur.get());
-        }
-        cout << "Destruction Film " << film->titre << endl;
-        delete film;
-    }
-
-    void detruireActeur(Acteur * acteur) {
+void detruireActeur(Acteur * acteur) {
         cout << "Destruction Acteur " << acteur->nom << endl;
         delete acteur;
-    }
+}
 
-    bool joueEncore(const Acteur* acteur) {
-        return acteur->joueDans.size() != 0;
-    }
+bool joueEncore(const Acteur* acteur) {
+    return acteur->joueDans.size() != 0;
+}
 
-    //TODO: Une fonction pour détruire une ListeFilms et tous les films qu'elle contient.
-    ListeFilms::~ListeFilms()
+//TODO: Une fonction pour détruire un film (relâcher toute la mémoire associée à ce film, et les acteurs qui ne jouent plus dans aucun films de la collection).  Noter qu'il faut enleve le film détruit des films dans lesquels jouent les acteurs.  Pour fins de débogage, affichez les noms des acteurs lors de leur destruction.
+void detruireFilm(Film * film)
+{ 
+    for (shared_ptr<Acteur> acteur : film->acteurs.enSpan()) 
     {
-        if (possedeLesFilms_)
-            for (Film* film : enSpan())
-                detruireFilm(film);
-        delete[] elements;
+        acteur.get()->joueDans.enleverFilm(film);
+        if (!joueEncore(acteur.get()))
+            detruireActeur(acteur.get());
     }
 
-    ostream& afficherActeur(ostream& flux, const Acteur & acteur)
-    {
-        return flux << "  " << acteur.nom << ", " << acteur.anneeNaissance << " " << acteur.sexe << endl;
-    }
+    cout << "Destruction Film " << film->titre << endl;
+    delete film;
+}
 
-    //TODO: Une fonction pour afficher un film avec tous ces acteurs (en utilisant la fonction afficherActeur ci-dessus).
-    ostream& afficherFilm(ostream& flux, const Film& film)
-    {
-        flux << "Titre: " << film.titre << endl;
-        flux << "  Réalisateur: " << film.realisateur << "  Année :" << film.anneeSortie << endl;
-        flux << "  Recette: " << film.recette << "M$" << endl;
-        flux << "Acteurs:" << endl;
+//TODO: Une fonction pour détruire une ListeFilms et tous les films qu'elle contient.
+ListeFilms::~ListeFilms() {
+    if (possedeLesFilms_)
+        for (Film* film : enSpan())
+            detruireFilm(film);
+        delete[] elements_;
+}
 
-        for (shared_ptr<Acteur> acteur : film.acteurs.enSpan())
-            afficherActeur(flux, *acteur.get());
+ostream& afficherActeur(ostream& flux, const Acteur & acteur) {
+    return flux << "  " << acteur.nom << ", " << acteur.anneeNaissance << " " << acteur.sexe << endl;
+}
 
-        return flux;
-    }
+//TODO: Une fonction pour afficher un film avec tous ces acteurs (en utilisant la fonction afficherActeur ci-dessus).
+ostream& afficherFilm(ostream& flux, const Film& film) {
+    flux << "Titre: " << film.titre << endl;
+    flux << "  Réalisateur: " << film.realisateur << "  Année :" << film.anneeSortie << endl;
+    flux << "  Recette: " << film.recette << "M$" << endl;
+    flux << "Acteurs:" << endl;
 
-    void afficherListeFilms(const ListeFilms & listeFilms)
-    {
-        //TODO: Utiliser des caractères Unicode pour définir la ligne de séparation (différente des autres lignes de séparations dans ce progamme).
-        static const string ligneDeSeparation = "\033[32m────────────────────────────────────────\033[0m\n";
+    for (shared_ptr<Acteur> acteur : film.acteurs.enSpan())
+        afficherActeur(flux, *acteur.get());
+
+    return flux;
+}
+
+void afficherListeFilms(const ListeFilms & listeFilms)
+{
+    static const string ligneDeSeparation = "\033[32m────────────────────────────────────────\033[0m\n";
      
-        cout << ligneDeSeparation;
+    cout << ligneDeSeparation;
         
-        for (const Film* film : listeFilms.enSpan()) {
-            
-            //TODO: Afficher le film.
-            cout << *film;
-            std::cout << ligneDeSeparation;
-        }
+    for (const Film* film : listeFilms.enSpan()) {
+        std::cout << film;
+        std::cout << ligneDeSeparation;
+    }
+}
+
+ostream& operator<<(ostream& flux, const Film& film) {
+    return afficherFilm(flux, film);
+}
+
+Film* ListeFilms::operator[](int indice) {
+    return this->elements_[indice];
+}
+
+shared_ptr<Acteur> ListeActeurs::operator[](int indice){
+    return this->elements_[indice];
+}
+
+Film* ListeFilms::trouverFilm(const auto critere) 
+{
+    for (auto&& film : listefilm.enSpan()) {
+        if (critere(film))
+            return film;
     }
 
-    ostream& operator<<(ostream& flux, const Film& film)
-    {
-        return afficherFilm(flux, film);
-    }
+    return nullptr;
+}
 
-    Film* ListeFilms::trouverFilm(const auto critere) {
-        for (auto&& film : listefilm.enSpan()) {
-            if (critere(film))
-                return film;
-        }
-        return nullptr;
-    }
+int main()
+{
+    #ifdef VERIFICATION_ALLOCATION_INCLUS
+    bibliotheque_cours::VerifierFuitesAllocations verifierFuitesAllocations;
+    #endif
+    bibliotheque_cours::activerCouleursAnsi();
 
-    int main()
-    {
-        #ifdef VERIFICATION_ALLOCATION_INCLUS
-        bibliotheque_cours::VerifierFuitesAllocations verifierFuitesAllocations;
-        #endif
-        bibliotheque_cours::activerCouleursAnsi();
+    int* fuite = new int;
 
-        int* fuite = new int;
+    static const string ligneDeSeparation = "\n\033[35m════════════════════════════════════════\033[0m\n";
 
-        static const string ligneDeSeparation = "\n\033[35m════════════════════════════════════════\033[0m\n";
+    ListeFilms listeFilms("films.bin");
 
-        ListeFilms listeFilms("films.bin");
+    std::cout << ligneDeSeparation << "Le premier film de la liste est:" << endl;
+    //TODO: Afficher le premier film de la liste.  Devrait être Alien.
+    cout << listeFilms[0];
 
-        std::cout << ligneDeSeparation << "Le premier film de la liste est:" << endl;
-        //TODO: Afficher le premier film de la liste.  Devrait être Alien.
-        afficherFilm(*((listeFilms.enSpan())[0]));
+    cout << ligneDeSeparation << "Les films sont:" << endl;
+    //TODO: Afficher la liste des films.  Il devrait y en avoir 7.
+    afficherListeFilms(listeFilms);
 
-        cout << ligneDeSeparation << "Les films sont:" << endl;
-        //TODO: Afficher la liste des films.  Il devrait y en avoir 7.
-        afficherListeFilms(listeFilms);
+    //Chapitre 7
 
-        //Chapitre 7
-
-        ostringstream tamponStringStream;
-        tamponStringStream << listeFilms[0];
-        string filmEnString = tamponStringStream.str();
-        cout << filmEnString;
+    ostringstream tamponStringStream;
+    tamponStringStream << listeFilms[0];
+    string filmEnString = tamponStringStream.str();
+    cout << filmEnString;
 
 
-        // Chapitre 7-8
-        Film skylien = *listeFilms[0];
-        skylien.titre = "Skylien";
-        skylien.acteurs[0] = listeFilms[1]->acteurs[0];
-        skylien.acteurs[0]->nom = "Daniel Wroughton Craig";
-        std::cout << ligneDeSeparation << "skylien" << endl;
-        std::cout << &skylien << endl;
-        std::cout << ligneDeSeparation << "listeFilms[0]" << endl;
-        std::cout << listeFilms[0] << endl;
-        std::cout << ligneDeSeparation << "listeFilms[1]" << endl;
-        std::cout << listeFilms[1] << endl;
+    // Chapitre 7-8
+    Film skylien = *listeFilms[0];
+    skylien.titre = "Skylien";
+    skylien.acteurs[0] = listeFilms[1]->acteurs[0];
+    skylien.acteurs[0]->nom = "Daniel Wroughton Craig";
+    std::cout << ligneDeSeparation << "skylien" << endl;
+    std::cout << &skylien << endl;
+    std::cout << ligneDeSeparation << "listeFilms[0]" << endl;
+    std::cout << listeFilms[0] << endl;
+    std::cout << ligneDeSeparation << "listeFilms[1]" << endl;
+    std::cout << listeFilms[1] << endl;
+    
+    // Chapitre 10
+    cout << ligneDeSeparation << endl;
+    Film* filmRecette = listeFilms.trouverFilm() {
+        return type->recette == 955;
+    });
 
-        // Chapitre 10
-        cout << ligneDeSeparation << endl;
-        Film* filmRecette = listeFilms.trouverFilm(listeFilms.enSpan(), [](auto type) {
-            return type->recette == 955;
-            });
-        cout << filmRecette << endl;
-    }
+    cout << filmRecette << endl;
+
+    return 0;
+}
